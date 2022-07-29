@@ -9,6 +9,7 @@ const { response } = require('express');
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+// Connection properties
 const db = mysql.createConnection(
     {
         host: 'localhost',
@@ -19,13 +20,13 @@ const db = mysql.createConnection(
     console.log(`Connected to the work database.`)
 );
 
-// init();
-
+// Establish connection to database
 db.connect(function (err) {
     if (err) throw err
     init();
 })
 
+// Main menu 
 function init() {
     inquirer
         .prompt([
@@ -54,19 +55,20 @@ function init() {
                     addRole()
                     break;
                 case 'View All Departments':
-
+                    viewAllDepartments()
                     break;
                 case 'Add Department':
-
+                    addDepartment()
                     break;
                 case "Quit":
-
-                    db.end
+                    console.log("Goodbye")
+                    db.end()
 
             }
         });
 }
 
+// view all employees on a table
 function viewAllEmployees() {
     const viewEmployees = 'SELECT employee.id, employee.first_name, employee.last_name, roles.title, department.names AS department, roles.salary, CONCAT (manager.first_name, " ", manager.last_name) AS manager FROM employee LEFT JOIN roles ON employee.role_id = roles.id LEFT JOIN department ON roles.department_id = department.id LEFT JOIN employee manager ON employee.manager_id = manager.id'
     db.query(viewEmployees, (err, res) => {
@@ -77,6 +79,7 @@ function viewAllEmployees() {
     })
 }
 
+// add a new employee to the database
 function addEmployee() {
     inquirer
         .prompt([
@@ -92,6 +95,7 @@ function addEmployee() {
             }
         ])
         .then(response => {
+            // An array storing the values needed for adding an employee
             let roleList = [response.firstName, response.lastName]
             db.query("SELECT roles.id, roles.title FROM roles", (err, data) => {
                 if (err)
@@ -107,10 +111,12 @@ function addEmployee() {
                         }
                     )
                     .then(roleRes => {
+                        // add the role of the employee to the array
                         roleList.push(roleRes.role)
                         db.query("SELECT * FROM employee", (err, data) => {
                             if (err)
                                 throw error
+                            // create new array storing a full name to determine a manager
                             const managers = data.map(({ id, first_name, last_name }) => ({ name: first_name + " " + last_name, value: id }))
                             inquirer
                                 .prompt(
@@ -122,8 +128,9 @@ function addEmployee() {
                                     }
                                 )
                                 .then(managerRes => {
+                                    // add the new employee's manager name
                                     roleList.push(managerRes.manager)
-                                    db.query('INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?,?,?,?)', roleList), (err,res) => {
+                                    db.query('INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES (?,?,?,?)', roleList), (err, res) => {
                                         if (err)
                                             throw error
                                     }
@@ -135,23 +142,22 @@ function addEmployee() {
         })
 }
 
+// update employee role to a new role
 function updateRole() {
     let roleArr = [];
     let managerArr = [];
-    db.query('SELECT employee.id, employee.first_name, employee.last_name FROM employee', (err, data) => {
+    db.query('SELECT employee.id, employee.first_name, employee.last_name FROM employee', (err, dataEmp) => {
         if (err)
             throw error
-        data.forEach((employee) => {
+        dataEmp.forEach((employee) => {
             managerArr.push(`${employee.first_name} ${employee.last_name}`)
         });
-        console.log(managerArr)
         db.query('SELECT roles.id, roles.title FROM roles', (err, data) => {
             if (err)
                 throw error
             data.forEach((roles) => {
                 roleArr.push(roles.title)
             });
-            console.log(roleArr)
             inquirer
                 .prompt([
                     {
@@ -170,7 +176,7 @@ function updateRole() {
                 .then(response => {
                     let newTitleId
                     let employeeId
-                    data.forEach((employee) => {
+                    dataEmp.forEach((employee) => {
                         if (response.empName === `${employee.first_name} ${employee.last_name}`) {
                             employeeId = employee.id
                         }
@@ -190,6 +196,7 @@ function updateRole() {
     })
 }
 
+// view all roles on a table
 function viewAllRoles() {
     db.query("SELECT * FROM roles", (err, data) => {
         if (err)
@@ -199,31 +206,75 @@ function viewAllRoles() {
     })
 }
 
-// function addRole() {
-//     inquirer
-//         .prompt([
-//             {
-//                 name: 'roleName',
-//                 type: 'input',
-//                 message: 'What is the name of the role?'
-//             },
-//             {
-//                 name: 'roleSalary',
-//                 type: 'input',
-//                 message: 'What is the salary of the role?'
-//             }
-//         ])
-//         .then(response => {
-//             let addRoleList = [response.roleName, response.roleSalary]
-//             const roles = data.map(({ id, title }) => ({ name: title, value: id }));
-//                 inquirer
-//                     .prompt(
-//                         {
-//                             name: 'role',
-//                             type: 'list',
-//                             message: "What is the employee's role?",
-//                             choices: roles
-//                         }
-//                     )
-//         })
-// }
+// add a new role to the database
+function addRole() {
+    inquirer
+        .prompt([
+            {
+                name: 'roleName',
+                type: 'input',
+                message: 'What is the name of the role?'
+            },
+            {
+                name: 'roleSalary',
+                type: 'input',
+                message: 'What is the salary of the role?'
+            }
+        ])
+        .then(response => {
+            // An array holding values for query search
+            let addRoleList = [response.roleName, parseInt(response.roleSalary)]
+            db.query("SELECT department.id, department.names FROM department", (err, data) => {
+                if (err)
+                    throw error
+                const roles = data.map(({ id, names }) => ({ name: names, value: id }));
+                inquirer
+                    .prompt(
+                        {
+                            name: 'departmentId',
+                            type: 'list',
+                            message: "Which department does the role belong to?",
+                            choices: roles
+                        }
+                    )
+                    .then(roleRes => {
+                        addRoleList.push(roleRes.departmentId)
+                        db.query('INSERT INTO roles (title, salary, department_id) VALUES (?,?,?)', addRoleList), (err) => {
+                            if (err)
+                                throw error
+                        }
+                        init()
+                    })
+            })
+        })
+}
+
+// view all departments on a table
+function viewAllDepartments() {
+    db.query("SELECT * FROM department", (err, data) => {
+        if (err)
+            throw error
+        console.table(data)
+        init()
+    })
+}
+
+// add a new department to the database 
+function addDepartment() {
+    inquirer
+        .prompt([
+            {
+                name: 'addDepartment',
+                type: 'input',
+                message: 'What is the name of the department?'
+            }
+        ])
+        .then(response => {
+            db.query("INSERT INTO department (department.names) VALUES (?)", response.addDepartment), (err) => {
+                if (err)
+                    throw error
+            }
+            console.log("Successfully added department")
+            init()
+        })
+}
